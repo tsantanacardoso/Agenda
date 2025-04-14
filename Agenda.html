@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Painel de Atividades</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Arial', sans-serif;
+      background: #121212;
+      color: #eee;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 2rem;
+    }
+    .atividade {
+      padding: 15px;
+      margin: 8px 0;
+      border-radius: 12px;
+      transition: 0.3s;
+      width: 100%;
+      max-width: 500px;
+      text-align: center;
+      font-size: 1.2rem;
+    }
+    .ativa {
+      animation: blink 1s infinite;
+      font-weight: bold;
+      transform: scale(1.05);
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .pausa { background: #FFC107; color: #000; }
+    .planejamento { background: #2196F3; }
+    .base { background: #9C27B0; }
+    .atendimento { background: #E91E63; }
+    .atualizar { background: #FF5722; }
+
+    @media (max-width: 600px) {
+      h1 { font-size: 1.5rem; }
+      .atividade { font-size: 1rem; padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>Agenda Automática</h1>
+<div id="agenda"></div>
+<audio id="alarme" src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"></audio>
+
+<script>
+  const atividades = [
+    { horaInicio: "08:50", horaFim: "09:15", nome: "Planejar o dia / Entrar nas Salas / Ler email", tipo: "planejamento" },
+    { horaInicio: "09:15", horaFim: "09:20", nome: "Pausa", tipo: "pausa" },
+    { horaInicio: "09:20", horaFim: "09:45", nome: "Atendimento", tipo: "atendimento" },
+    { horaInicio: "09:45", horaFim: "09:50", nome: "Pausa", tipo: "pausa" },
+    { horaInicio: "09:50", horaFim: "10:15", nome: "Atendimento", tipo: "atendimento" },
+    { horaInicio: "10:15", horaFim: "10:30", nome: "Levar Sophia", tipo: "pausa" },
+    { horaInicio: "10:30", horaFim: "10:55", nome: "Base", tipo: "base" },
+    { horaInicio: "10:55", horaFim: "11:00", nome: "Pausa", tipo: "pausa" },
+    { horaInicio: "11:00", horaFim: "11:25", nome: "Atendimento", tipo: "atendimento" },
+    { horaInicio: "11:25", horaFim: "11:30", nome: "Arrumar almoço", tipo: "pausa" },
+    { horaInicio: "11:30", horaFim: "11:55", nome: "Atendimento", tipo: "atendimento" },
+    { horaInicio: "11:55", horaFim: "12:00", nome: "Almoçar", tipo: "pausa" },
+    { horaInicio: "12:00", horaFim: "12:25", nome: "Atualizar", tipo: "atualizar" },
+    { horaInicio: "12:25", horaFim: "12:30", nome: "Pausa", tipo: "pausa" },
+    { horaInicio: "12:30", horaFim: "12:55", nome: "Planejar o dia / Entrar nas Salas / Ler email", tipo: "planejamento" },
+    { horaInicio: "12:55", horaFim: "14:00", nome: "Pausa", tipo: "pausa" },
+    { horaInicio: "14:00", horaFim: "14:25", nome: "Atualizar", tipo: "atualizar" },
+    { horaInicio: "14:25", horaFim: "14:30", nome: "Pausa", tipo: "pausa" },
+    { horaInicio: "14:30", horaFim: "14:55", nome: "Atendimento", tipo: "atendimento" },
+    { horaInicio: "14:55", horaFim: "15:00", nome: "Pausa", tipo: "pausa" },
+    { horaInicio: "15:00", horaFim: "15:25", nome: "Atendimento", tipo: "atendimento" },
+    { horaInicio: "15:25", horaFim: "15:30", nome: "Pausa", tipo: "pausa" },
+    { horaInicio: "15:30", horaFim: "15:55", nome: "Base", tipo: "base" },
+    { horaInicio: "15:55", horaFim: "16:05", nome: "Pausa", tipo: "pausa" },
+    { horaInicio: "16:05", horaFim: "16:30", nome: "Atendimento", tipo: "atendimento" },
+    { horaInicio: "16:30", horaFim: "16:35", nome: "Pausa", tipo: "pausa" },
+    { horaInicio: "16:35", horaFim: "17:00", nome: "Atendimento", tipo: "atendimento" },
+    { horaInicio: "17:00", horaFim: "17:05", nome: "Pausa", tipo: "pausa" },
+    { horaInicio: "17:05", horaFim: "17:30", nome: "Base", tipo: "base" },
+    { horaInicio: "17:30", horaFim: "17:35", nome: "Pausa", tipo: "pausa" },
+    { horaInicio: "17:35", horaFim: "18:00", nome: "Atualizar", tipo: "atualizar" },
+    { horaInicio: "18:00", horaFim: "18:30", nome: "Pausa", tipo: "pausa" },
+  ];
+
+  const agendaDiv = document.getElementById("agenda");
+  const alarme = document.getElementById("alarme");
+  let ultimaAtividade = null;
+
+  // Pede permissão para notificações assim que o site carrega
+  if (Notification.permission !== "granted") {
+    Notification.requestPermission();
+  }
+
+  function notificar(titulo, corpo) {
+    if (Notification.permission === "granted") {
+      const notif = new Notification(titulo, { body: corpo });
+      notif.onclick = () => window.focus();
+    }
+  }
+
+  function renderAgenda() {
+    agendaDiv.innerHTML = "";
+    const agora = new Date();
+    const horaAtual = agora.toTimeString().slice(0,5);
+    let atividadeAtualElemento = null;
+    let atividadeAtual = null;
+
+    atividades.forEach(a => {
+      const div = document.createElement("div");
+      div.className = `atividade ${a.tipo}`;
+
+      if (horaAtual >= a.horaInicio && horaAtual < a.horaFim) {
+        div.classList.add("ativa");
+        atividadeAtualElemento = div;
+        atividadeAtual = a;
+      }
+      div.textContent = `${a.horaInicio} às ${a.horaFim} - ${a.nome}`;
+      agendaDiv.appendChild(div);
+    });
+
+    if (atividadeAtual && atividadeAtual !== ultimaAtividade) {
+      alarme.play();
+      notificar("Nova Atividade", `${atividadeAtual.nome} (${atividadeAtual.horaInicio})`);
+      ultimaAtividade = atividadeAtual;
+    }
+
+    if (atividadeAtualElemento) {
+      atividadeAtualElemento.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+    }
+  }
+
+  renderAgenda();
+  setInterval(renderAgenda, 1000);
+</script>
+
+</body>
+</html>
