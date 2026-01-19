@@ -2,152 +2,287 @@
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
-  <title>Painel de Atividades</title>
+  <title>Agenda Pro</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Arial', sans-serif;
-      background: #121212;
-      color: #eee;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+      color: #eee; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh;
     }
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-      font-size: 2rem;
-    }
-    .atividade {
-      padding: 15px;
-      margin: 8px 0;
-      border-radius: 12px;
-      transition: 0.3s;
-      width: 100%;
-      max-width: 500px;
-      text-align: center;
-      font-size: 1.2rem;
-    }
-    .ativa {
-      animation: blink 1s infinite;
-      font-weight: bold;
-      transform: scale(1.05);
-    }
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-    .pausa { background: #FFC107; color: #000; }
-    .planejamento { background: #2196F3; }
-    .base { background: #9C27B0; }
-    .atendimento { background: #E91E63; }
-    .atualizar { background: #FF5722; }
+    .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border-radius: 15px; border: 1px solid rgba(255, 255, 255, 0.1); }
+
+    /* --- Dashboard de Estatísticas --- */
+    #stats-container { width: 100%; max-width: 600px; padding: 15px; margin-bottom: 15px; display: flex; justify-content: space-around; text-align: center; }
+    .stat-value { font-size: 1.5rem; font-weight: bold; color: #4CAF50; }
+    .stat-label { font-size: 0.7rem; color: #aaa; text-transform: uppercase; }
+
+    #timer-container { padding: 20px; margin-bottom: 20px; text-align: center; width: 100%; max-width: 600px; position: sticky; top: 10px; z-index: 100; }
+    #timer-clock { font-size: 3rem; font-weight: bold; color: #4CAF50; }
+    .progress-bar { width: 100%; background: rgba(255, 255, 255, 0.1); height: 8px; border-radius: 10px; margin-top: 15px; overflow: hidden; }
+    #progress-fill { height: 100%; background: #4CAF50; width: 0%; transition: width 1s linear; }
+
+    /* --- Lista de Atividades --- */
+    #agenda { width: 100%; max-width: 600px; padding-bottom: 50px; }
+    .atividade { padding: 15px; margin: 10px 0; display: flex; align-items: center; border-left: 6px solid transparent; transition: 0.3s; cursor: pointer; }
+    
+    /* Cores das Atividades */
+    .pausa { border-left-color: #FFC107 !important; background: rgba(255, 193, 7, 0.15); }
+    .planejamento { border-left-color: #2196F3 !important; background: rgba(33, 150, 243, 0.15); }
+    .base { border-left-color: #9C27B0 !important; background: rgba(156, 39, 176, 0.15); }
+    .atendimento { border-left-color: #E91E63 !important; background: rgba(233, 30, 99, 0.15); }
+    .atualizar { border-left-color: #FF5722 !important; background: rgba(255, 87, 34, 0.15); }
+
+    .ativa { border: 1px solid rgba(255, 255, 255, 0.5); transform: scale(1.03); box-shadow: 0 0 15px rgba(255,255,255,0.1); }
+    .concluida { opacity: 0.3; filter: grayscale(1); }
+    .concluida span { text-decoration: line-through; }
+
+    /* Checkbox Estilizado */
+    .check-btn { width: 22px; height: 22px; border-radius: 50%; border: 2px solid white; margin-right: 15px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .checked { background: #4CAF50; border-color: #4CAF50; }
+    .checked::after { content: '✓'; color: white; font-weight: bold; font-size: 14px; }
+
+    /* Menu de Ações */
+    .acoes-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 20px 0; }
+    .btn { padding: 12px 18px; border-radius: 8px; cursor: pointer; border: none; font-weight: 600; color: white; transition: 0.2s; font-size: 0.9rem; }
+    
+    input, select { background: #2a2a3e !important; color: white !important; border: 1px solid #444; padding: 8px; border-radius: 5px; width: 100%; }
+    select option { background: #1a1a2e; color: white; }
 
     @media (max-width: 600px) {
-      h1 { font-size: 1.5rem; }
-      .atividade { font-size: 1rem; padding: 12px; }
+      .acoes-container { flex-direction: column; width: 100%; max-width: 300px; }
+      #timer-clock { font-size: 2.5rem; }
     }
   </style>
 </head>
 <body>
 
-<h1>Agenda Automática</h1>
+<div id="stats-container" class="glass">
+    <div class="stat-item">
+        <div id="stat-done" class="stat-value">0/0</div>
+        <div class="stat-label">Concluídas</div>
+    </div>
+    <div class="stat-item">
+        <div id="stat-percent" class="stat-value">0%</div>
+        <div class="stat-label">Progresso</div>
+    </div>
+</div>
+
+<div id="timer-container" class="glass">
+    <div id="current-task-name" style="opacity: 0.8; font-size: 1rem;">Prepare-se para começar!</div>
+    <div id="timer-clock">00:00</div>
+    <div class="progress-bar"><div id="progress-fill"></div></div>
+</div>
+
 <div id="agenda"></div>
+
+<div class="acoes-container">
+    <button class="btn" style="background:#555" onclick="toggleEdit()">⚙️ Editar Manual</button>
+    <button class="btn" style="background:#673AB7" onclick="document.getElementById('file-input').click()">📁 Importar</button>
+    <button class="btn" style="background:#FF9800" onclick="resetarChecklist()">🔄 Resetar Checklist</button>
+    <button class="btn" style="background:#607D8B" onclick="exportarParaExcel()">📥 Baixar Planilha</button>
+    <button class="btn" style="background:#b71c1c" onclick="limparTudo()">🗑️ Limpar Agenda</button>
+    <input type="file" id="file-input" style="display:none" accept=".xlsx, .xls, .csv" onchange="importarArquivo(event)">
+</div>
+
+<div id="edit-area" class="glass" style="display:none; width:100%; max-width:850px; padding:20px; margin-top:20px; margin-bottom: 50px;">
+    <h3 style="text-align: center; margin-bottom: 15px;">Ajuste Fino da Agenda</h3>
+    <button class="btn" style="background:#2196F3; margin-bottom:10px;" onclick="adicionarLinha()">+ Nova Linha</button>
+    <div style="overflow-x: auto;">
+        <table style="width:100%; border-collapse: collapse;">
+            <thead>
+                <tr>
+                    <th style="text-align:left; color:#aaa; font-size:0.8rem; padding:5px;">Início</th>
+                    <th style="text-align:left; color:#aaa; font-size:0.8rem; padding:5px;">Fim</th>
+                    <th style="text-align:left; color:#aaa; font-size:0.8rem; padding:5px;">Atividade</th>
+                    <th style="text-align:left; color:#aaa; font-size:0.8rem; padding:5px;">Tipo</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="tabela-corpo"></tbody>
+        </table>
+    </div>
+    <button class="btn" style="background:#4CAF50; width:100%; margin-top:15px;" onclick="salvarTabela()">Salvar Alterações</button>
+</div>
+
 <audio id="alarme" src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"></audio>
 
 <script>
-  const atividades = [
-    { horaInicio: "08:20", horaFim: "08:45", nome: "Planejar o dia / Entrar nas Salas / Ler email", tipo: "planejamento" },
-    { horaInicio: "08:45", horaFim: "08:50", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "08:50", horaFim: "09:15", nome: "Atendimento", tipo: "atendimento" },
-    { horaInicio: "09:15", horaFim: "09:20", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "09:20", horaFim: "09:45", nome: "Atendimento", tipo: "atendimento" },
-    { horaInicio: "09:45", horaFim: "09:50", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "09:50", horaFim: "10:15", nome: "Atendimento", tipo: "atendimento" },
-    { horaInicio: "10:15", horaFim: "10:30", nome: "Levar Sophia", tipo: "pausa" },
-    { horaInicio: "10:30", horaFim: "10:55", nome: "Base", tipo: "base" },
-    { horaInicio: "10:55", horaFim: "11:00", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "11:00", horaFim: "11:25", nome: "Atendimento", tipo: "atendimento" },
-    { horaInicio: "11:25", horaFim: "11:30", nome: "Arrumar almoço", tipo: "pausa" },
-    { horaInicio: "11:30", horaFim: "11:55", nome: "Atendimento", tipo: "atendimento" },
-    { horaInicio: "11:55", horaFim: "12:00", nome: "Almoçar", tipo: "pausa" },
-    { horaInicio: "12:00", horaFim: "12:25", nome: "Atualizar", tipo: "atualizar" },
-    { horaInicio: "12:25", horaFim: "12:30", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "12:30", horaFim: "12:55", nome: "Planejar o dia / Entrar nas Salas / Ler email", tipo: "planejamento" },
-    { horaInicio: "12:55", horaFim: "14:00", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "14:00", horaFim: "14:25", nome: "Atualizar", tipo: "atualizar" },
-    { horaInicio: "14:25", horaFim: "14:30", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "14:30", horaFim: "14:55", nome: "Atendimento", tipo: "atendimento" },
-    { horaInicio: "14:55", horaFim: "15:00", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "15:00", horaFim: "15:25", nome: "Atendimento", tipo: "atendimento" },
-    { horaInicio: "15:25", horaFim: "15:30", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "15:30", horaFim: "15:55", nome: "Base", tipo: "base" },
-    { horaInicio: "15:55", horaFim: "16:05", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "16:05", horaFim: "16:30", nome: "Atendimento", tipo: "atendimento" },
-    { horaInicio: "16:30", horaFim: "16:35", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "16:35", horaFim: "17:00", nome: "Atendimento", tipo: "atendimento" },
-    { horaInicio: "17:00", horaFim: "17:05", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "17:05", horaFim: "17:30", nome: "Base", tipo: "base" },
-    { horaInicio: "17:30", horaFim: "17:35", nome: "Pausa", tipo: "pausa" },
-    { horaInicio: "17:35", horaFim: "18:00", nome: "Atualizar", tipo: "atualizar" },
-    { horaInicio: "18:00", horaFim: "18:30", nome: "Pausa", tipo: "pausa" },
-  ];
+  const STORAGE_KEY = "agenda_v12_final";
+  let atividades = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+  let ultimaTarefaNome = "";
 
-  const agendaDiv = document.getElementById("agenda");
-  const alarme = document.getElementById("alarme");
-  let ultimaAtividade = null;
-
-  // Pede permissão para notificações assim que o site carrega
-  if (Notification.permission !== "granted") {
-    Notification.requestPermission();
+  // Auxiliar para tratar horas vindas do Excel (Texto ou Número)
+  function formatarHora(valor) {
+    if (!valor) return "08:00";
+    if (typeof valor === 'number') {
+        let t = Math.round(valor * 86400);
+        return Math.floor(t/3600).toString().padStart(2,'0')+":"+Math.floor((t%3600)/60).toString().padStart(2,'0');
+    }
+    let s = String(valor).trim();
+    if (s.includes(":")) return s.split(":").slice(0,2).map(v => v.padStart(2,'0')).join(":");
+    return "08:00";
   }
 
-  function notificar(titulo, corpo) {
-    if (Notification.permission === "granted") {
-      const notif = new Notification(titulo, { body: corpo });
-      notif.onclick = () => window.focus();
+  // --- FUNÇÃO NOVIDADE: RESETAR CHECKLIST ---
+  function resetarChecklist() {
+    if (atividades.length === 0) return;
+    if (confirm("Deseja desmarcar todas as tarefas para iniciar um novo dia?")) {
+        atividades = atividades.map(a => ({ ...a, concluida: false }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(atividades));
+        renderizar();
     }
   }
 
-  function renderAgenda() {
-    agendaDiv.innerHTML = "";
+  function importarArquivo(event) {
+    const file = event.target.files[0];
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+      
+      atividades = json.map(row => {
+        const get = (list) => {
+            const k = Object.keys(row).find(key => list.includes(key.trim()));
+            return k ? row[k] : null;
+        };
+        return {
+          horaInicio: formatarHora(get(["Horário início", "inicio", "horaInicio"])),
+          horaFim: formatarHora(get(["Horário Término", "fim", "horaFim"])),
+          nome: get(["Atividade", "nome", "atividade"]) || "Sem Nome",
+          tipo: (get(["Tipo", "tipo"]) || "atendimento").toLowerCase().trim(),
+          concluida: false
+        };
+      });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(atividades));
+      location.reload();
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function renderizar() {
     const agora = new Date();
-    const horaAtual = agora.toTimeString().slice(0,5);
-    let atividadeAtualElemento = null;
-    let atividadeAtual = null;
-
-    atividades.forEach(a => {
+    const horaAtual = agora.getHours().toString().padStart(2, '0') + ":" + agora.getMinutes().toString().padStart(2, '0');
+    const agendaDiv = document.getElementById("agenda");
+    agendaDiv.innerHTML = "";
+    
+    atividades.sort((a,b) => a.horaInicio.localeCompare(b.horaInicio)).forEach((a, i) => {
       const div = document.createElement("div");
-      div.className = `atividade ${a.tipo}`;
-
-      if (horaAtual >= a.horaInicio && horaAtual < a.horaFim) {
+      div.className = `atividade glass ${a.tipo} ${a.concluida ? 'concluida' : ''}`;
+      
+      const estaAtiva = horaAtual >= a.horaInicio && horaAtual < a.horaFim;
+      if (estaAtiva) {
         div.classList.add("ativa");
-        atividadeAtualElemento = div;
-        atividadeAtual = a;
+        atualizarTimer(a, agora);
+        if (a.nome !== ultimaTarefaNome) {
+            document.getElementById("alarme").play().catch(()=>{});
+            setTimeout(() => div.scrollIntoView({behavior:"smooth", block:"center"}), 300);
+            ultimaTarefaNome = a.nome;
+        }
       }
-      div.textContent = `${a.horaInicio} às ${a.horaFim} - ${a.nome}`;
+
+      div.onclick = () => {
+        atividades[i].concluida = !atividades[i].concluida;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(atividades));
+        renderizar();
+      };
+
+      div.innerHTML = `
+        <div class="check-btn ${a.concluida ? 'checked' : ''}"></div>
+        <div style="flex-grow:1; display:flex; justify-content:space-between; align-items:center;">
+            <span>${a.nome}</span>
+            <span style="font-size:0.85rem; opacity:0.8; font-family:monospace;">${a.horaInicio} - ${a.horaFim}</span>
+        </div>
+      `;
       agendaDiv.appendChild(div);
     });
+    
+    const done = atividades.filter(a => a.concluida).length;
+    document.getElementById("stat-done").textContent = `${done}/${atividades.length}`;
+    document.getElementById("stat-percent").textContent = `${atividades.length > 0 ? Math.round(done/atividades.length*100) : 0}%`;
+  }
 
-    if (atividadeAtual && atividadeAtual !== ultimaAtividade) {
-      alarme.play();
-      notificar("Nova Atividade", `${atividadeAtual.nome} (${atividadeAtual.horaInicio})`);
-      ultimaAtividade = atividadeAtual;
-    }
-
-    if (atividadeAtualElemento) {
-      atividadeAtualElemento.scrollIntoView({
-        behavior: "smooth",
-        block: "center"
-      });
+  function atualizarTimer(a, agora) {
+    const [hF, mF] = a.horaFim.split(":").map(Number);
+    const [hI, mI] = a.horaInicio.split(":").map(Number);
+    const dF = new Date(); dF.setHours(hF, mF, 0);
+    const dI = new Date(); dI.setHours(hI, mI, 0);
+    const total = dF - dI;
+    const restante = dF - agora;
+    if (restante > 0) {
+      const m = Math.floor(restante / 60000);
+      const s = Math.floor((restante % 60000) / 1000);
+      document.getElementById("timer-clock").textContent = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+      document.getElementById("current-task-name").textContent = a.nome;
+      document.getElementById("progress-fill").style.width = Math.min(((agora - dI) / total * 100), 100) + "%";
     }
   }
 
-  renderAgenda();
-  setInterval(renderAgenda, 1000);
-</script>
+  function toggleEdit() {
+    const area = document.getElementById("edit-area");
+    area.style.display = area.style.display === "none" ? "block" : "none";
+    if (area.style.display === "block") {
+        const corpo = document.getElementById("tabela-corpo");
+        corpo.innerHTML = "";
+        atividades.forEach(a => adicionarLinha(a));
+    }
+  }
 
+  function adicionarLinha(d = {horaInicio:"08:00", horaFim:"09:00", nome:"", tipo:"atendimento"}) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input type="time" class="in-ini" value="${d.horaInicio}"></td>
+      <td><input type="time" class="in-fim" value="${d.horaFim}"></td>
+      <td><input type="text" class="in-nome" value="${d.nome}"></td>
+      <td>
+        <select class="in-tipo">
+          <option value="atendimento" ${d.tipo==='atendimento'?'selected':''}>Atendimento</option>
+          <option value="pausa" ${d.tipo==='pausa'?'selected':''}>Pausa</option>
+          <option value="planejamento" ${d.tipo==='planejamento'?'selected':''}>Planejamento</option>
+          <option value="base" ${d.tipo==='base'?'selected':''}>Base</option>
+          <option value="atualizar" ${d.tipo==='atualizar'?'selected':''}>Atualizar</option>
+        </select>
+      </td>
+      <td><button onclick="this.parentElement.parentElement.remove()" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">✕</button></td>
+    `;
+    document.getElementById("tabela-corpo").appendChild(tr);
+  }
+
+  function salvarTabela() {
+    const novas = [];
+    document.querySelectorAll("#tabela-corpo tr").forEach(tr => {
+      novas.push({
+        horaInicio: tr.querySelector(".in-ini").value,
+        horaFim: tr.querySelector(".in-fim").value,
+        nome: tr.querySelector(".in-nome").value,
+        tipo: tr.querySelector(".in-tipo").value,
+        concluida: false
+      });
+    });
+    atividades = novas;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(atividades));
+    location.reload();
+  }
+
+  function exportarParaExcel() {
+    const ws = XLSX.utils.json_to_sheet(atividades);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Agenda");
+    XLSX.writeFile(wb, "minha_agenda.xlsx");
+  }
+
+  function limparTudo() {
+    if (confirm("Limpar toda a agenda? Isso apagará todas as tarefas.")) { 
+        localStorage.removeItem(STORAGE_KEY); 
+        location.reload(); 
+    }
+  }
+
+  setInterval(renderizar, 1000);
+  renderizar();
+</script>
 </body>
 </html>
